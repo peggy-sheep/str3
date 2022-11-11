@@ -12,6 +12,9 @@ from keras.models import Sequential
 from keras.layers import LSTM
 from keras.layers import Dense
 from tensorflow.keras.optimizers import Adam
+import xgboost as xgb
+from xgboost import plot_importance, plot_tree
+from sklearn.metrics import mean_squared_error, mean_absolute_error
 
 #=======================================================================================================================
 
@@ -28,6 +31,9 @@ print(df4)
 df6=pd.read_csv('./function11_2.csv')
 df6= df6.set_index("Start_Date")
 df6.index=pd.to_datetime(df6.index)
+
+df7 = pd.read_csv('./function11_2.csv', index_col=[0], parse_dates=[0])
+color_pal = ["#F8766D", "#D39200", "#93AA00", "#00BA38", "#00C19F", "#00B9E3", "#619CFF", "#DB72FB"]
 
 reload_model_bilstm = tf.keras.models.load_model('./keras_model_bilstm_3.h5')
 reload_model_bilstm.summary()
@@ -873,6 +879,145 @@ elif selected_status_6 == 'MLP':
 # st.sidebar.header("Predict Part")
 # st.subheader("Predict Part")
 
+#=================================================================================================================================
+elif selected_status_6 == 'XGBoost':
+    st.subheader("Predict Part")
+    split_date = '06-19-2018'
+    df_train = df7.loc[df7.index <= split_date].copy()
+    df_test = df7.loc[df7.index > split_date].copy()
+
+
+    def create_features(df7, label=None):
+        """
+        Creates time series features from datetime index
+        """
+        df7['date'] = df7.index
+        df7['dayofweek'] = df7['date'].dt.dayofweek
+        df7['quarter'] = df7['date'].dt.quarter
+        df7['month'] = df7['date'].dt.month
+        
+        X = df7[['dayofweek','quarter','month']]
+        if label:
+            y = df7[label]
+            return X, y
+        return X
+
+    X_train, y_train = create_features(df_train, label='Total_kWh')
+    X_test, y_test = create_features(df_test, label='Total_kWh')
+    print(X_train)
+    print(y_train)
+    print(X_test)
+    print(y_test)
+    
+    
+    # mask1 = y_train ["Team"] != "Marketing"
+
+
+    print(y_train)
+    print(X_test)
+
+    # if selected_status_7 == 7:
+    #     y_train = y[train_size-22:train_size-7]
+    #     X_test, y_test = X[train_size:train_size+7], y[train_size:train_size+7]
+    # elif selected_status_7 == 14:
+    #     y_train = y[train_size-22:train_size-7]
+    #     X_test, y_test = X[train_size:train_size+14], y[train_size:train_size+14]
+    # elif selected_status_7 == 21:
+    #     y_train = y[train_size-29:train_size-7]
+    #     X_test, y_test = X[train_size:train_size+21], y[train_size:train_size+21]
+    # elif selected_status_7 == 28:
+    #     y_train = y[train_size-37:train_size-7]
+    #     X_test, y_test = X[train_size:train_size+28], y[train_size:train_size+28]
+
+    reg = xgb.XGBRegressor(n_estimators=150,learning_rate = 0.01)
+    reg.fit(X_train, y_train,
+            eval_set=[(X_train, y_train), (X_test, y_test)],
+            early_stopping_rounds=15,
+            eval_metric=["error", "logloss"],
+            verbose=False) # Change verbose to True if you want to see it train
+
+    #_ = plot_importance(reg, height=0.9)
+    #plt.show()
+
+    df_test['Prediction'] = reg.predict(X_test)
+    print(df_test['Prediction'] )
+    df_all = pd.concat([df_test, df_train], sort=False)
+    #_ = df_all[['Total_kWh','MW_Prediction']].plot(figsize=(15, 5))
+    #plt.show()
+    if selected_status_7 == 7:
+        split_date_7 = '06-12-2018'
+        split_date_71 = '06-19-2018'
+        split_date_72 = '06-20-2018'
+        split_date_73 = '06-26-2018'
+        
+        y_train = y_train.loc[(y_train.index >= split_date_7)&(y_train.index <= split_date_71)]
+        df_test['Prediction'] = df_test['Prediction'].loc[(df_test['Prediction'].index >= split_date_72)&(df_test['Prediction'].index <= split_date_73)]
+    elif selected_status_7 == 14:
+        split_date_14 = '06-05-2018'
+        split_date_141 = '06-19-2018'
+        split_date_142 = '06-20-2018'
+        split_date_143 = '07-03-2018'
+        
+        y_train = y_train.loc[(y_train.index >= split_date_14)&(y_train.index <= split_date_141)]
+        df_test['Prediction'] = df_test['Prediction'].loc[(df_test['Prediction'].index >= split_date_142)&(df_test['Prediction'].index <= split_date_143)]
+    elif selected_status_7 == 21:
+        split_date_21 = '05-29-2018'
+        split_date_211 = '06-19-2018'
+        split_date_212 = '06-20-2018'
+        split_date_213 = '07-10-2018'
+        
+        y_train = y_train.loc[(y_train.index >= split_date_21)&(y_train.index <= split_date_211)]
+        df_test['Prediction'] = df_test['Prediction'].loc[(df_test['Prediction'].index >= split_date_212)&(df_test['Prediction'].index <= split_date_213)]
+    elif selected_status_7 == 28:
+        split_date_28 = '05-22-2018'
+        split_date_281 = '06-19-2018'
+        split_date_282 = '06-20-2018'
+        split_date_283 = '07-17-2018'
+        
+        y_train = y_train.loc[(y_train.index >= split_date_28)&(y_train.index <= split_date_281)]
+        df_test['Prediction'] = df_test['Prediction'].loc[(df_test['Prediction'].index >= split_date_282)&(df_test['Prediction'].index <= split_date_283)]  
+    
+    def plot_multi_step(history, prediction1):
+        fig4 = plt.figure(figsize=(15, 6))
+        range_history = len(history)
+        range_future = list(range(range_history, range_history + len(prediction1)))
+        plt.plot(np.arange(range_history), np.array(history), label='History')
+        plt.plot(range_future, np.array(prediction1),label='Forecasted with BiLSTM')
+        plt.legend(loc='upper right')
+        plt.xlabel('Time step')
+        plt.ylabel('Tital_kwh') 
+        st.pyplot(fig4)
+        # plt.show()
+    plot_multi_step(y_train, df_test['Prediction'] )
+
+    if selected_status_7 == 7:
+        st.write('Predicted value of charging energy consumption in the next 7 days')
+        st.write(df_test['Prediction'].head(7))
+    elif selected_status_7 == 14:
+        st.write('Predicted value of charging energy consumption in the next 14 days')
+        st.write(df_test['Prediction'].head(14))
+    elif selected_status_7 == 21:
+        st.write('Predicted value of charging energy consumption in the next 21 days')
+        st.write(df_test['Prediction'].head(21))
+    else:
+        st.write('Predicted value of charging energy consumption in the next 28 days')
+        st.write(df_test['Prediction'].head(28))
+
+    def evaluate_prediction(predictions, actual, model_name):
+        errors = predictions - actual
+        mse = np.square(errors).mean()
+        rmse = np.sqrt(mse)
+        mae = np.abs(errors).mean()
+        st.write(model_name +' Evaluation Metrics(Please choose selected box)'+ ':')
+        if selected_status_8_1:
+            st.write('RMSE: {:.4f}'.format(rmse))
+        if selected_status_8_2:
+            st.write('MSE: {:.4f}'.format(mse))
+        if selected_status_8_3:
+            st.write('MAE: {:.4f}'.format(mae))
+        st.write('')
+    evaluate_prediction(df_test['Total_kWh'],df_test['Prediction'],'XGBoost')
+    
 
 
 
